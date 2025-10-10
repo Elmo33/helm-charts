@@ -34,7 +34,7 @@ runs:
       shell: bash
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/test-setup-python@v4
       with:
         python-version: '3.12.3'
         cache: 'pip'
@@ -50,13 +50,6 @@ runs:
       run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
       shell: bash
 
-    - name: Install Helm
-      run: |
-        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-        
-        helm version
-      shell: bash
-
     - name: Install Minikube
       run: |
         # Install kubectl
@@ -68,6 +61,12 @@ runs:
         curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         sudo install minikube-linux-amd64 /usr/local/bin/minikube
         
+        # Install Docker (required for minikube driver)
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        sudo systemctl start docker
+        sudo systemctl enable docker
+        sudo usermod -aG docker $USER
         
         # Verify installations
         kubectl version --client

@@ -38,19 +38,19 @@ jobs:
     smoke:
       name: smoke
       if: ${{ inputs.suite == 'smoke' }}
-      runs-on: [ "arc-runners-qa" ]
+      runs-on: ubuntu-latest
       timeout-minutes: 60
 
       steps:
-        - name: Checkout
+        - name: ⤵️ Checkout
           uses: actions/checkout@v4
           with:
             ref: ${{ github.ref }}
             fetch-depth: 0
 
-        - name: Setup
+        - name: 🛠️ Setup
           uses: ./.github/actions/test-setup
 
-        - name: Run Test Module
+        - name: 🧪 Run Test Module
           run: |
             python3 ./tests/run/smoke.py 
