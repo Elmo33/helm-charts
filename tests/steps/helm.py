@@ -24,7 +24,7 @@ def install(self, namespace, release_name, values=None, values_file=None, local=
     cmd += values_argument(values=values, values_file=values_file)
 
     with When("install ClickHouse Operator"):
-        r = run(cmd=cmd, check=False)
+        r = run(cmd=cmd, check=True)
 
     yield r
 
