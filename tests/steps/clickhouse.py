@@ -5,12 +5,16 @@ import tests.steps.kubernetes as kubernetes
 
 
 @TestStep(When)
-def get_version(self, namespace, pod_name):
+def get_version(self, namespace, pod_name, user="default", password=""):
     """Get ClickHouse version from the specified pod."""
+
+    auth_args = f"-u {user}" if user else ""
+    if password:
+        auth_args += f" --password {password}"
 
     version = run(
         cmd=f"kubectl exec -n {namespace} {pod_name} "
-        "-- clickhouse-client -q 'SELECT version()'"
+        f"-- clickhouse-client {auth_args} -q 'SELECT version()'"
     )
     return version.stdout.strip()
 
@@ -116,7 +120,7 @@ def wait_for_clickhouse_pods_running(self, namespace, expected_count=None, timeo
 
 
 @TestStep(When)
-def verify_clickhouse_version(self, namespace, expected_version, pod_name=None):
+def verify_clickhouse_version(self, namespace, expected_version, pod_name=None, user="default", password=""):
     """Verify ClickHouse version matches expected version."""
 
     if pod_name is None:
@@ -125,7 +129,7 @@ def verify_clickhouse_version(self, namespace, expected_version, pod_name=None):
             raise AssertionError("No ClickHouse pods found")
         pod_name = clickhouse_pods[0]
 
-    version = get_version(namespace=namespace, pod_name=pod_name)
+    version = get_version(namespace=namespace, pod_name=pod_name, user=user, password=password)
     note(f"ClickHouse version: {version}")
 
     assert (
@@ -178,7 +182,7 @@ def verify_persistence_configuration(self, namespace, expected_size="10Gi"):
         storage_size == expected_size
     ), f"Expected storage size {expected_size}, got {storage_size}"
 
-    note(f"✅ Persistence configuration verified: {expected_size} storage")
+    note(f"Persistence configuration verified: {expected_size} storage")
 
 
 @TestStep(When)
@@ -204,3 +208,58 @@ def verify_keeper_pods_running(self, namespace, expected_count=None):
     
     note(f"Keeper pods running: {keeper_pods}")
     return keeper_pods
+
+
+@TestStep(Then)
+def verify_pods_image(self, namespace, expected_image_tag, pod_names=None):
+    """Verify that ClickHouse pods are running with the expected image tag.
+    
+    Args:
+        namespace: Kubernetes namespace
+        expected_image_tag: Expected image tag string
+        pod_names: Optional list of pod names. If None, gets all ClickHouse pods
+    """
+    
+    if pod_names is None:
+        pod_names = get_clickhouse_pods(namespace=namespace)
+    
+    assert len(pod_names) > 0, "No ClickHouse pods found"
+    
+    for pod in pod_names:
+        image = kubernetes.get_pod_image(namespace=namespace, pod_name=pod)
+        assert expected_image_tag in image, (
+            f"Expected image tag '{expected_image_tag}' in pod {pod}, got {image}"
+        )
+        note(f"Pod {pod} is running with correct image: {image}")
+    
+    note(f"All {len(pod_names)} pods verified with image tag: {expected_image_tag}")
+
+
+@TestStep(Then)
+def verify_user_connection(self, namespace, user, password, pod_name=None):
+    """Verify that a user can connect to ClickHouse with given credentials.
+    
+    Args:
+        namespace: Kubernetes namespace
+        user: Username to test
+        password: Password for the user
+        pod_name: Optional pod name. If None, uses first ClickHouse pod
+    """
+    
+    if pod_name is None:
+        clickhouse_pods = get_clickhouse_pods(namespace=namespace)
+        if not clickhouse_pods:
+            raise AssertionError("No ClickHouse pods found")
+        pod_name = clickhouse_pods[0]
+    
+    result = test_clickhouse_connection(
+        namespace=namespace,
+        pod_name=pod_name,
+        user=user,
+        password=password
+    )
+    
+    assert result, f"Failed to connect to ClickHouse with user '{user}'"
+    note(f"Successfully connected with user: {user}")
+    
+    return result
