@@ -309,3 +309,19 @@ def verify_loadbalancer_service(self, namespace, expected_ranges=None):
     
     note(f"✓ LoadBalancer service: {lb_service_name}")
     return lb_service_name
+
+
+@TestStep(When)
+def delete_namespace(self, namespace):
+    """Delete a Kubernetes namespace and wait for it to be removed.
+    
+    Args:
+        namespace: Kubernetes namespace to delete
+    """
+    try:
+        note(f"Deleting namespace: {namespace}")
+        run(cmd=f"kubectl delete namespace {namespace} --wait=true --timeout=300s", 
+            exitcode=None)
+        note(f"✓ Namespace {namespace} deleted")
+    except Exception as e:
+        note(f"Warning: Failed to delete namespace {namespace}: {e}")
