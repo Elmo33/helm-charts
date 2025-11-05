@@ -152,3 +152,91 @@ def wait_for_pods_running(self, namespace, timeout=300):
             )
 
         time.sleep(10)
+
+
+@TestStep(Then)
+def verify_pvc_storage_size(self, namespace, expected_size):
+    """Verify that at least one PVC has the expected storage size."""
+    
+    pvcs = get_pvcs(namespace=namespace)
+    assert len(pvcs) > 0, "No PVCs found for persistence"
+    note(f"Created PVCs: {pvcs}")
+
+    # Verify at least one PVC has the expected size
+    for pvc in pvcs:
+        pvc_info = run(cmd=f"kubectl get pvc {pvc} -n {namespace} -o json")
+        pvc_data = json.loads(pvc_info.stdout)
+        storage_size = (
+            pvc_data.get("spec", {})
+            .get("resources", {})
+            .get("requests", {})
+            .get("storage")
+        )
+        if storage_size == expected_size:
+            note(f"PVC {pvc} has correct storage size: {storage_size}")
+            return pvc
+    
+    raise AssertionError(
+        f"No PVC found with expected storage size {expected_size}"
+    )
+
+
+@TestStep(Then)
+def verify_loadbalancer_service_exists(self, namespace):
+    """Verify that at least one LoadBalancer service exists."""
+    
+    services = get_services(namespace=namespace)
+    lb_services = [
+        s
+        for s in services
+        if get_service_type(service_name=s, namespace=namespace) == "LoadBalancer"
+    ]
+    assert len(lb_services) > 0, "LoadBalancer service not found"
+    note(f"LoadBalancer services found: {lb_services}")
+    
+    return lb_services[0]
+
+
+@TestStep(Then)
+def verify_loadbalancer_source_ranges(self, namespace, service_name, expected_ranges):
+    """Verify LoadBalancer service has correct source ranges."""
+    
+    service_info = get_service_info(service_name=service_name, namespace=namespace)
+    source_ranges = service_info["spec"].get("loadBalancerSourceRanges", [])
+    
+    assert source_ranges == expected_ranges, (
+        f"Expected source ranges {expected_ranges}, got {source_ranges}"
+    )
+    note(f"LoadBalancer source ranges verified: {source_ranges}")
+
+
+@TestStep(Then)
+def verify_loadbalancer_ports(self, namespace, service_name, expected_ports):
+    """Verify LoadBalancer service has correct ports.
+    
+    Args:
+        namespace: Kubernetes namespace
+        service_name: Name of the service
+        expected_ports: Dict mapping port names to port numbers, e.g. {"http": 8123, "tcp": 9000}
+    """
+    
+    service_info = get_service_info(service_name=service_name, namespace=namespace)
+    ports = service_info["spec"]["ports"]
+    port_names = [p["name"] for p in ports]
+    
+    with By("verifying LoadBalancer ports"):
+        for port_name in expected_ports.keys():
+            assert port_name in port_names, (
+                f"Expected port '{port_name}' not found in {port_names}"
+            )
+    
+    with And("verifying port numbers"):
+        for port in ports:
+            if port["name"] in expected_ports:
+                expected_port = expected_ports[port["name"]]
+                assert port["port"] == expected_port, (
+                    f"Expected {port['name']} port {expected_port}, got {port['port']}"
+                )
+                note(f"Port {port['name']}: {port['port']}")
+    
+    note(f"All LoadBalancer ports verified")
